@@ -1,22 +1,27 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
+# %% [markdown]
+# # Road Accident Severity Analysis
+# This notebook analyses UK road accident data to build predictive models, identify spatial hotspots, and evaluate road safety trends.
+
 import os
 import warnings
 from pathlib import Path
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
-from sklearn.impute import SimpleImputer
-from imblearn.over_sampling import SMOTE
-from xgboost import XGBClassifier
-from sklearn.metrics import f1_score
-from sklearn.cluster import DBSCAN
+
 import folium
 from folium.plugins import HeatMap
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+
+from imblearn.over_sampling import SMOTE
+from sklearn.cluster import DBSCAN
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (accuracy_score, classification_report, confusion_matrix, f1_score)
+from sklearn.model_selection import GridSearchCV, train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from xgboost import XGBClassifier
 
 # Optional: SHAP for model explainability
 # import shap
@@ -32,58 +37,62 @@ sns.set_theme(style="whitegrid", context="notebook")
 Path("outputs").mkdir(parents=True, exist_ok=True)
 Path("plots").mkdir(parents=True, exist_ok=True)
 
+###############################################################################
+# %% [markdown]
+# ## 1. Initial Data Inspection
+# We'll begin by examining the structure and contents of the dataset, checking data types, missing values, and some random samples.
+###############################################################################
+
 # Load the dataset
 df = pd.read_csv('dft-road-casualty-statistics-collision-2023.csv', low_memory=False)
 
-print("\n=== INITIAL DATA INSPECTION ===")
-
-# 1. Print the shape of the DataFrame
-print("\n1. DataFrame Shape:")
-print(f"Rows: {df.shape[0]}, Columns: {df.shape[1]}")
-
-# 2. Display first 5 rows
-print("\n2. First 5 rows:")
+#
+# Display the shape of the dataset
+print(f"\nDataset shape: Rows = {df.shape[0]}, Columns = {df.shape[1]}")
+#
+# Show the first 5 rows of the dataset
+print("\nFirst 5 rows of the dataset:")
 print(df.head())
-
-# 3. Display 5 random rows
-print("\n3. 5 Random rows:")
+#
+# Show 5 random rows to inspect data variety
+print("\nSample of 5 random rows:")
 print(df.sample(5, random_state=42))  # random_state for reproducibility
-
-# 4. Show data types and null counts
-print("\n4. DataFrame Info:")
+#
+# Display data types and non-null value counts for all columns
+print("\nDataFrame information:")
 print(df.info())
-
-# 5. Summary statistics for numeric columns
-print("\n5. Summary Statistics for Numeric Columns:")
+#
+# Show summary statistics for numeric columns
+print("\nSummary statistics for numeric columns:")
 print(df.describe(include=[np.number]))
-
-# 6. Summary statistics for categorical columns
-print("\n6. Summary Statistics for Categorical Columns:")
+#
+# Show summary statistics for categorical columns
+print("\nSummary statistics for categorical columns:")
 print(df.describe(include=['object', 'category']))
-
-# 7. Missing values per column in descending order
-print("\n7. Missing Values per Column (Descending Order):")
+#
+# Show missing value counts per column, sorted by most missing
+print("\nMissing values per column (sorted by most missing):")
 missing_values = df.isnull().sum()
 print(missing_values[missing_values > 0].sort_values(ascending=False))
+#
+# Identify low-value columns in the dataset
+print("\nIdentifying low-value columns in the dataset")
 
-# 8. Identify low-value columns
-print("\n8. Identifying Low-Value Columns")
-
-# 1. Columns with only one unique value (excluding NaNs)
+# Columns with only one unique value (excluding NaNs)
 single_value_cols = []
 for col in df.columns:
     unique_values = df[col].dropna().nunique()
     if unique_values <= 1:
         single_value_cols.append((col, unique_values))
 
-# 2. Columns where more than 95% of values are missing
+# Columns where more than 95% of values are missing
 high_missing_cols = []
 for col in df.columns:
     missing_pct = (df[col].isnull().sum() / len(df)) * 100
     if missing_pct > 95:
         high_missing_cols.append((col, missing_pct))
 
-# 3. Columns that are likely high-cardinality identifiers
+# Columns that are likely high-cardinality identifiers
 high_cardinality_cols = []
 for col in df.columns:
     unique_values = df[col].nunique()
@@ -102,28 +111,30 @@ print("\nColumns with high cardinality (likely identifiers):")
 for col, count in high_cardinality_cols:
     print(f"- {col}: {count} unique values out of {len(df)} rows")
 
-# Combine all low-value columns
+# Combine all identified low-value columns
 low_value_cols = set([col for col, _ in single_value_cols] + 
                      [col for col, _ in high_missing_cols] + 
                      [col for col, _ in high_cardinality_cols])
 
-print("\nAll identified low-value columns:")
+print("\nAll low-value columns identified in the dataset:")
 for col in sorted(low_value_cols):
     print(f"- {col}")
 
-print("\n=== DATA CLEANING STEPS ===")
+###############################################################################
+# %% [markdown]
+# ## 2. Data Cleaning
+# We remove rows with missing location data and replace special values such as -1 with NaN for more accurate processing.
+###############################################################################
 
-# 1. Drop Rows with Missing Location Data
+# Remove rows with missing location information
 location_cols = ['location_easting_osgr', 'location_northing_osgr', 'latitude', 'longitude']
 initial_rows = len(df)
 df = df.dropna(subset=location_cols)
 rows_removed = initial_rows - len(df)
-print("\n1. Rows Removed due to Missing Location Data:")
-print(f"Initial rows: {initial_rows}")
-print(f"Rows removed: {rows_removed}")
-print(f"Remaining rows: {len(df)}")
+print(f"\nRows removed due to missing location data: {rows_removed}")
+print(f"Remaining rows after location data cleaning: {len(df)}")
 
-# 2. Replace Special Codes (-1) with NaN
+# Replace special code (-1) with NaN for numeric columns
 numeric_cols = df.select_dtypes(include=[np.number]).columns
 replacements = {}
 for col in numeric_cols:
@@ -132,28 +143,31 @@ for col in numeric_cols:
         df[col] = df[col].replace(-1, np.nan)
         replacements[col] = count
 
-print("\n2. Replacements of -1 with NaN:")
+print("\nColumns where -1 values were replaced with NaN:")
 for col, count in replacements.items():
     print(f"{col}: {count} replacements")
 
-# 3. Clean String Columns
+# Standardize and clean string columns (lowercase, remove whitespace)
 object_cols = df.select_dtypes(include=['object']).columns
 for col in object_cols:
     df[col] = df[col].str.strip().str.lower()
 
-print("\n3. Unique Values in String Columns After Cleaning:")
+print("\nUnique value counts in string columns after cleaning:")
 for col in object_cols:
     unique_count = df[col].nunique()
     print(f"{col}: {unique_count} unique values")
 
-# 4. Profile Categorical Columns
-print("\n4. Top 10 Most Frequent Values in Categorical Columns:")
+# Show most frequent values in each categorical column
+print("\nTop 10 most frequent values for each categorical column:")
 for col in object_cols:
     print(f"\n{col}:")
     print(df[col].value_counts().head(10))
 
-# Part A: Feature Engineering for Risk Modelling
-print("\nPart A: Feature Engineering for Risk Modelling")
+###############################################################################
+# %% [markdown]
+# ## 3. Feature Engineering
+# We extract useful temporal and binary features to help capture accident patterns.
+###############################################################################
 
 # 1. Extract temporal features
 df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y')
@@ -172,8 +186,8 @@ df['is_weekend'] = df['day_of_week'].apply(lambda x: 1 if x in [6, 7] else 0)
 df = df.dropna(subset=['road_surface_conditions', 'weather_conditions'])
 df['road_weather_combo'] = df['road_surface_conditions'].astype(str) + '_' + df['weather_conditions'].astype(str)
 
-# 4. Print class balance with correct labels
-print("\nClass Balance of accident_severity (UK DfT Classification):")
+# Show class balance of accident severity (UK DfT Classification)
+print("\nClass balance of accident_severity (UK DfT Classification):")
 severity_counts = df['accident_severity'].value_counts().sort_index()
 severity_labels = {
     1: "Fatal",
@@ -181,120 +195,116 @@ severity_labels = {
     3: "Slight"
 }
 
-print("\nCounts:")
+print("\nAccident severity counts:")
 for severity, count in severity_counts.items():
     print(f"{severity_labels[severity]}: {count:,}")
 
-print("\nPercentages:")
+print("\nAccident severity percentages:")
 total_count = len(df)
 for severity, count in severity_counts.items():
     percentage = round((count / total_count * 100), 2)
     print(f"{severity_labels[severity]}: {percentage}%")
 
-# Part B: Geospatial Setup for Hotspot Detection
-print("\nPart B: Geospatial Setup for Hotspot Detection")
+###############################################################################
+# %% [markdown]
+# ## 4. Geospatial Preparation
+# We filter for valid latitude and longitude to prepare for geospatial clustering and mapping.
+###############################################################################
 
 # 5. Filter for valid coordinates
 df_geo = df[df['latitude'].notna() & df['longitude'].notna()].copy()
 
-# 6. Print severity counts for geospatial data with correct labels
-print("\nNumber of rows by accident_severity in geospatial dataset:")
+# Show severity counts for geospatial dataset
+print("\nAccident severity counts in geospatial dataset:")
 geo_severity_counts = df_geo['accident_severity'].value_counts().sort_index()
 for severity, count in geo_severity_counts.items():
     print(f"{severity_labels[severity]}: {count:,}")
 
-# 1. Create a copy and drop low-value columns
-print("\n1. Preparing DataFrame for Modeling")
+###############################################################################
+# %% [markdown]
+# ## 5. Model Training (with and without enhanced_severity_collision)
+# We evaluate baseline models and retrain them without data leakage for a fair performance assessment.
+###############################################################################
 
-# Create a copy of the main DataFrame
 df_model = df.copy()
-
-# Define columns to drop
-drop_cols = ['accident_index', 'accident_reference', 'accident_year', 
+drop_cols = ['accident_reference', 'accident_year', 
              'local_authority_district', 'latitude', 'longitude']
-
-# Drop the columns if they exist
 df_model = df_model.drop(columns=[col for col in drop_cols if col in df_model.columns])
 
-# Print confirmation of removed columns and new shape
-print("\nColumns removed:")
+print("\nColumns removed from DataFrame for modeling:")
 for col in drop_cols:
     if col in df.columns and col not in df_model.columns:
         print(f"- {col}")
 
-print(f"\nOriginal DataFrame shape: {df.shape}")
-print(f"Model DataFrame shape: {df_model.shape}")
+print(f"\nShape before removing columns: {df.shape}")
+print(f"Shape after removing columns: {df_model.shape}")
 
-# 2. Define target and features
-print("\n2. Preparing Features and Target")
-
-# Define columns to exclude
+# Prepare features and target variable
+print("\nPreparing features and target variable for model training")
 exclude_cols = [
     'date', 'time',
     'location_easting_osgr', 'location_northing_osgr',
     'local_authority_ons_district', 'local_authority_highway', 'lsoa_of_accident_location'
 ]
-
-# Select features
 feature_cols = [col for col in df_model.columns if col not in exclude_cols + ['accident_severity']]
 X = df_model[feature_cols]
 y = df_model['accident_severity']
 
-# Handle categorical variables
+# Encode categorical variables
 categorical_cols = X.select_dtypes(include=['object']).columns
 le = LabelEncoder()
 for col in categorical_cols:
     X[col] = le.fit_transform(X[col].astype(str))
 
-# Handle missing values
-print("\nMissing values before imputation:")
+# Show missing values before imputation
+print("\nMissing values in features before imputation:")
 missing_before = X.isnull().sum()
 print(missing_before[missing_before > 0].sort_values(ascending=False))
 
-print("\nHandling missing values...")
-# For numerical columns, use median imputation
+# Impute missing values in numerical columns using median
+print("\nImputing missing values using median for numerical columns")
 numerical_cols = X.select_dtypes(include=[np.number]).columns
 for col in numerical_cols:
     imputer = SimpleImputer(strategy='median')
     X[col] = imputer.fit_transform(X[[col]])
 
-print("\nMissing values after imputation:")
+# Show missing values after imputation
+print("\nMissing values in features after imputation:")
 missing_after = X.isnull().sum()
 print(missing_after[missing_after > 0].sort_values(ascending=False))
 
-# Scale numerical features
-print("\nScaling numerical features...")
+# Scale numerical features for modeling
+print("\nScaling numerical features for modeling")
 for col in numerical_cols:
     scaler = StandardScaler()
     X[col] = scaler.fit_transform(X[[col]])
 
-print(f"\nNumber of features: {X.shape[1]}")
+print(f"\nTotal number of features used for modeling: {X.shape[1]}")
 print("\nFeature names:")
 for col in X.columns:
     print(f"- {col}")
 
-# 3. Split the data
-print("\n3. Splitting Data into Train/Test Sets")
+# Split data into training and test sets
+print("\nSplitting data into training and test sets")
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
+print(f"Training set size: {X_train.shape[0]}")
+print(f"Test set size: {X_test.shape[0]}")
 
-print(f"Training set size: {X_train.shape[0]} samples")
-print(f"Test set size: {X_test.shape[0]} samples")
+# Train and evaluate models (with enhanced_severity_collision)
+print("\n### Training and Evaluating Models (WITH enhanced_severity_collision)")
 
-# 4. Train and evaluate models with enhanced_severity_collision
-print("\n4. Training Models (WITH enhanced_severity_collision)")
-
-# Logistic Regression
-print("\nTraining Logistic Regression...")
+# Train Logistic Regression model
+print("Training Logistic Regression model...")
 lr_model = LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced')
 lr_model.fit(X_train, y_train)
 
-# Random Forest
-print("Training Random Forest...")
+# Train Random Forest model
+print("Training Random Forest model...")
 rf_model = RandomForestClassifier(n_estimators=100, class_weight='balanced', random_state=42)
 rf_model.fit(X_train, y_train)
 
-# 5. Evaluate models with enhanced_severity_collision
-print("\n5. Model Evaluation (WITH enhanced_severity_collision)")
+# Evaluate models with enhanced_severity_collision
+print("\nEvaluating models (WITH enhanced_severity_collision)")
 
 def evaluate_model(model, X_test, y_test, model_name):
     # Make predictions
@@ -314,34 +324,32 @@ def evaluate_model(model, X_test, y_test, model_name):
     
     return accuracy, report, conf_matrix
 
-# Evaluate both models
-print("\nEvaluating Logistic Regression...")
+# Evaluate Logistic Regression
+print("\nEvaluating Logistic Regression model:")
 lr_metrics = evaluate_model(lr_model, X_test, y_test, "Logistic Regression")
 
-print("\nEvaluating Random Forest...")
+# Evaluate Random Forest
+print("\nEvaluating Random Forest model:")
 rf_metrics = evaluate_model(rf_model, X_test, y_test, "Random Forest")
 
-# 6. Model comparison with enhanced_severity_collision
-print("\n6. Model Comparison Summary (WITH enhanced_severity_collision)")
-print("\nAccuracy Comparison:")
-print(f"Logistic Regression: {lr_metrics[0]:.4f}")
-print(f"Random Forest: {rf_metrics[0]:.4f}")
+# Show accuracy comparison
+print("\nModel accuracy comparison (WITH enhanced_severity_collision):")
+print(f"Logistic Regression accuracy: {lr_metrics[0]:.4f}")
+print(f"Random Forest accuracy: {rf_metrics[0]:.4f}")
 
-# Feature importance for Random Forest
+# Show top 10 most important features for Random Forest
 feature_importance = pd.DataFrame({
     'feature': X.columns,
     'importance': rf_model.feature_importances_
 })
 feature_importance = feature_importance.sort_values('importance', ascending=False)
-
-print("\nTop 10 Most Important Features (Random Forest):")
+print("\nTop 10 most important features (Random Forest):")
 print(feature_importance.head(10))
 
-# 7. Now remove enhanced_severity_collision and retrain
-print("\n7. Retraining Models (WITHOUT enhanced_severity_collision)")
+# Remove enhanced_severity_collision and retrain models to prevent data leakage
+print("\n### Retraining Models (WITHOUT enhanced_severity_collision)")
 
-# Remove enhanced_severity_collision
-print("\nRemoving enhanced_severity_collision to prevent data leakage...")
+print("\nRemoving enhanced_severity_collision to prevent data leakage")
 X_no_leak = X.drop(columns=['enhanced_severity_collision'])
 
 # Split the data again
@@ -349,98 +357,89 @@ X_train_no_leak, X_test_no_leak, y_train, y_test = train_test_split(
     X_no_leak, y, test_size=0.3, random_state=42, stratify=y
 )
 
-# Train new models
-print("\nTraining Logistic Regression...")
+# Train Logistic Regression without enhanced_severity_collision
+print("\nTraining Logistic Regression model (no enhanced_severity_collision)...")
 lr_model_no_leak = LogisticRegression(max_iter=1000, random_state=42, class_weight='balanced')
 lr_model_no_leak.fit(X_train_no_leak, y_train)
 
-print("Training Random Forest...")
+# Train Random Forest without enhanced_severity_collision
+print("Training Random Forest model (no enhanced_severity_collision)...")
 rf_model_no_leak = RandomForestClassifier(n_estimators=100, class_weight='balanced', random_state=42)
 rf_model_no_leak.fit(X_train_no_leak, y_train)
 
-# 8. Evaluate models without enhanced_severity_collision
-print("\n8. Model Evaluation (WITHOUT enhanced_severity_collision)")
-
-print("\nEvaluating Logistic Regression...")
+# Evaluate models without enhanced_severity_collision
+print("\nEvaluating Logistic Regression model (no enhanced_severity_collision):")
 lr_metrics_no_leak = evaluate_model(lr_model_no_leak, X_test_no_leak, y_test, "Logistic Regression")
 
-print("\nEvaluating Random Forest...")
+print("\nEvaluating Random Forest model (no enhanced_severity_collision):")
 rf_metrics_no_leak = evaluate_model(rf_model_no_leak, X_test_no_leak, y_test, "Random Forest")
 
-# 9. Final comparison
-print("\n9. Final Model Comparison")
-print("\nAccuracy Comparison:")
+# Final accuracy comparison
+print("\nFinal model accuracy comparison:")
 print("WITH enhanced_severity_collision:")
 print(f"Logistic Regression: {lr_metrics[0]:.4f}")
 print(f"Random Forest: {rf_metrics[0]:.4f}")
-print("\nWITHOUT enhanced_severity_collision:")
+print("WITHOUT enhanced_severity_collision:")
 print(f"Logistic Regression: {lr_metrics_no_leak[0]:.4f}")
 print(f"Random Forest: {rf_metrics_no_leak[0]:.4f}")
 
-# Feature importance for Random Forest without leakage
+# Show top 10 most important features for Random Forest without enhanced_severity_collision
 feature_importance_no_leak = pd.DataFrame({
     'feature': X_no_leak.columns,
     'importance': rf_model_no_leak.feature_importances_
 })
 feature_importance_no_leak = feature_importance_no_leak.sort_values('importance', ascending=False)
-
-print("\nTop 10 Most Important Features (Random Forest - WITHOUT enhanced_severity_collision):")
+print("\nTop 10 most important features (Random Forest, no enhanced_severity_collision):")
 print(feature_importance_no_leak.head(10))
 
-# === 10. Model Performance Improvements (Addressing Class Imbalance) ===
-print("\n=== 10. Model Performance Improvements (Addressing Class Imbalance) ===")
+###############################################################################
+# %% [markdown]
+# ## 6. Addressing Class Imbalance
+# We apply SMOTE and class weighting to improve prediction for minority classes like fatal accidents.
+###############################################################################
 
-# 1. SMOTE Oversampling for Minority Classes
-print("\n1. SMOTE Oversampling for Minority Classes")
-
-# Apply SMOTE to training data
-print("\nApplying SMOTE to training data...")
+# Apply SMOTE oversampling to training data
+print("\nApplying SMOTE oversampling to training data for minority classes")
 smote = SMOTE(random_state=42)
 X_train_smote, y_train_smote = smote.fit_resample(X_train_no_leak, y_train)
 
-print("\nClass distribution after SMOTE:")
+print("\nClass distribution after SMOTE oversampling:")
 print(pd.Series(y_train_smote).value_counts())
 
 # Train models on SMOTE data
-print("\nTraining models on SMOTE data...")
+print("\nTraining Logistic Regression and Random Forest models on SMOTE data")
 
 # Logistic Regression with SMOTE
-print("\nTraining Logistic Regression with SMOTE...")
+print("\nTraining Logistic Regression (SMOTE)...")
 lr_smote = LogisticRegression(max_iter=1000, random_state=42)
 lr_smote.fit(X_train_smote, y_train_smote)
 
 # Random Forest with SMOTE
-print("Training Random Forest with SMOTE...")
+print("Training Random Forest (SMOTE)...")
 rf_smote = RandomForestClassifier(n_estimators=100, random_state=42)
 rf_smote.fit(X_train_smote, y_train_smote)
 
 # Evaluate SMOTE models
-print("\nEvaluating SMOTE models...")
-
-print("\nLogistic Regression with SMOTE Results:")
+print("\nEvaluating SMOTE models")
+print("\nLogistic Regression (SMOTE) results:")
 lr_smote_metrics = evaluate_model(lr_smote, X_test_no_leak, y_test, "Logistic Regression (SMOTE)")
 
-print("\nRandom Forest with SMOTE Results:")
+print("\nRandom Forest (SMOTE) results:")
 rf_smote_metrics = evaluate_model(rf_smote, X_test_no_leak, y_test, "Random Forest (SMOTE)")
 
-# 2. XGBoost with Class Weighting
-print("\n2. XGBoost with Class Weighting")
-
-# Adjust class labels to start from 0
+# XGBoost with class weighting
+print("\nTraining XGBoost with class weighting for imbalanced classes")
 y_train_xgb = y_train - 1
 y_test_xgb = y_test - 1
-
-# Calculate class weights
 class_counts = np.bincount(y_train_xgb)
 total_samples = len(y_train_xgb)
 class_weights = total_samples / (len(class_counts) * class_counts)
-scale_pos_weight = class_weights[1] / class_weights[0]  # Ratio of majority to minority class
+scale_pos_weight = class_weights[1] / class_weights[0]
 
-print(f"\nClass weights: {class_weights}")
-print(f"scale_pos_weight: {scale_pos_weight}")
+print(f"\nClass weights used for XGBoost: {class_weights}")
+print(f"scale_pos_weight parameter: {scale_pos_weight}")
 
 # Train XGBoost
-print("\nTraining XGBoost...")
 xgb_model = XGBClassifier(
     scale_pos_weight=scale_pos_weight,
     random_state=42,
@@ -449,33 +448,29 @@ xgb_model = XGBClassifier(
 )
 xgb_model.fit(X_train_no_leak, y_train_xgb)
 
-# Evaluate XGBoost (adjust predictions back to original labels)
-print("\nXGBoost Results:")
+# Evaluate XGBoost (adjusting predictions back to original labels)
+print("\nXGBoost results:")
 y_pred_xgb = xgb_model.predict(X_test_no_leak) + 1
 accuracy = accuracy_score(y_test, y_pred_xgb)
 report = classification_report(y_test, y_pred_xgb, target_names=[severity_labels[i] for i in range(1, 4)])
 conf_matrix = confusion_matrix(y_test, y_pred_xgb)
-
 print(f"Accuracy: {accuracy:.4f}")
-print("\nClassification Report:")
+print("\nClassification report:")
 print(report)
-print("\nConfusion Matrix:")
+print("\nConfusion matrix:")
 print(conf_matrix)
-
 xgb_metrics = (accuracy, report, conf_matrix)
 
-# 3. Grid Search on Random Forest
-print("\n3. Grid Search on Random Forest")
-
-# Define parameter grid
+###############################################################################
+# %% [markdown]
+# ## 7. Advanced Models: XGBoost and GridSearch
+# We explore more complex algorithms and perform hyperparameter tuning.
+###############################################################################
 param_grid = {
     'n_estimators': [100, 200],
     'max_depth': [10, 20, None],
     'min_samples_split': [2, 5, 10]
 }
-
-# Initialize GridSearchCV
-print("\nPerforming Grid Search...")
 grid_search = GridSearchCV(
     RandomForestClassifier(random_state=42),
     param_grid,
@@ -483,37 +478,35 @@ grid_search = GridSearchCV(
     scoring='accuracy',
     n_jobs=-1
 )
-
-# Fit GridSearchCV
 grid_search.fit(X_train_no_leak, y_train)
 
-# Print best parameters and score
-print("\nGrid Search Results:")
-print(f"Best parameters: {grid_search.best_params_}")
+print("\nBest parameters from Grid Search:")
+print(grid_search.best_params_)
 print(f"Best cross-validation score: {grid_search.best_score_:.4f}")
 
-# Evaluate best model
-print("\nEvaluating best model from Grid Search...")
+# Evaluate best Random Forest model from Grid Search
+print("\nEvaluating best Random Forest model from Grid Search:")
 best_rf = grid_search.best_estimator_
 best_rf_metrics = evaluate_model(best_rf, X_test_no_leak, y_test, "Random Forest (Grid Search)")
 
-# Summary of all models
-print("\n=== Final Model Comparison ===")
-print("\nModel Performance Summary:")
-print("\n1. Original Models (No SMOTE):")
+###############################################################################
+# %% [markdown]
+# ## 8. Class-Specific Performance Analysis
+# We analyse confusion matrices and F1-scores to assess how well each model handles class imbalance.
+###############################################################################
+print("\nModel performance summary:")
+print("1. Original Models (No SMOTE):")
 print(f"Logistic Regression: {lr_metrics_no_leak[0]:.4f}")
 print(f"Random Forest: {rf_metrics_no_leak[0]:.4f}")
-
 print("\n2. SMOTE Models:")
 print(f"Logistic Regression with SMOTE: {lr_smote_metrics[0]:.4f}")
 print(f"Random Forest with SMOTE: {rf_smote_metrics[0]:.4f}")
-
 print("\n3. Advanced Models:")
 print(f"XGBoost: {xgb_metrics[0]:.4f}")
 print(f"Random Forest (Grid Search): {best_rf_metrics[0]:.4f}")
 
-# Save results to a text file
-print("\nSaving results to 'model_comparison_results.txt'...")
+# Save model comparison results to a text file
+print("\nSaving model comparison results to 'model_comparison_results.txt'...")
 with open('model_comparison_results.txt', 'w') as f:
     f.write("=== Model Performance Comparison ===\n\n")
     
@@ -532,73 +525,63 @@ with open('model_comparison_results.txt', 'w') as f:
     f.write("Best Parameters (Grid Search):\n")
     f.write(f"{grid_search.best_params_}\n")
 
-# === 11. Class-Specific Performance Analysis ===
-print("\n=== 11. Class-Specific Performance Analysis ===")
+###############################################################################
+# %% [markdown]
+# ## 9. Feature Pruning
+# We test the model's sensitivity to the removal of less important features to simplify the model.
+###############################################################################
 
-# Define class labels
 class_labels = ["Fatal", "Serious", "Slight"]
 
-# Function to print detailed model performance
 def print_detailed_performance(model, X_test, y_test, model_name):
     print(f"\n{model_name} Performance:")
-    
-    # Get predictions
     y_pred = model.predict(X_test)
-
-    # 1. Confusion Matrix
-    print("\n1. Confusion Matrix:")
+    print("\nConfusion Matrix:")
     conf_matrix = confusion_matrix(y_test, y_pred)
     conf_df = pd.DataFrame(conf_matrix, 
                           index=class_labels,
                           columns=class_labels)
     print(conf_df)
-    
-    # 2. Classification Report
-    print("\n2. Classification Report:")
+    print("\nClassification Report:")
     report = classification_report(y_test, y_pred, 
                                  target_names=class_labels,
                                  digits=4)
     print(report)
-    
-    # 3. Macro and Weighted F1-scores
     macro_f1 = f1_score(y_test, y_pred, average='macro')
     weighted_f1 = f1_score(y_test, y_pred, average='weighted')
-    print("\n3. F1-scores:")
+    print("\nF1-scores:")
     print(f"Macro-average F1-score: {macro_f1:.4f}")
     print(f"Weighted-average F1-score: {weighted_f1:.4f}")
 
-# Analyze each model
-print("\nAnalyzing Random Forest (without leakage)...")
+# Analyze Random Forest (without leakage)
+print("\nRandom Forest (without leakage):")
 print_detailed_performance(rf_model_no_leak, X_test_no_leak, y_test, "Random Forest (without leakage)")
 
-print("\nAnalyzing XGBoost...")
-# Get predictions and adjust labels
+# Analyze XGBoost
+print("\nXGBoost:")
 y_pred_xgb = xgb_model.predict(X_test_no_leak) + 1
-# Create a custom function for XGBoost analysis
-print("\nXGBoost Performance:")
-print("\n1. Confusion Matrix:")
+print("\nConfusion Matrix:")
 conf_matrix = confusion_matrix(y_test, y_pred_xgb)
 conf_df = pd.DataFrame(conf_matrix, 
                       index=class_labels,
                       columns=class_labels)
 print(conf_df)
-
-print("\n2. Classification Report:")
+print("\nClassification Report:")
 report = classification_report(y_test, y_pred_xgb, 
                              target_names=class_labels,
                              digits=4)
 print(report)
-
-print("\n3. F1-scores:")
+print("\nF1-scores:")
 macro_f1 = f1_score(y_test, y_pred_xgb, average='macro')
 weighted_f1 = f1_score(y_test, y_pred_xgb, average='weighted')
 print(f"Macro-average F1-score: {macro_f1:.4f}")
 print(f"Weighted-average F1-score: {weighted_f1:.4f}")
 
-print("\nAnalyzing Grid Search Random Forest...")
+# Analyze Grid Search Random Forest
+print("\nGrid Search Random Forest:")
 print_detailed_performance(best_rf, X_test_no_leak, y_test, "Grid Search Random Forest")
 
-# Save detailed results to file
+# Save detailed performance analysis to file
 print("\nSaving detailed performance analysis to 'detailed_performance_analysis.txt'...")
 with open('detailed_performance_analysis.txt', 'w') as f:
     f.write("=== Detailed Model Performance Analysis ===\n\n")
@@ -628,14 +611,15 @@ with open('detailed_performance_analysis.txt', 'w') as f:
     f.write(classification_report(y_test, best_rf.predict(X_test_no_leak), 
                                 target_names=class_labels))
 
-# === 13. Feature Pruning and Simplification Test ===
-print("\n=== 13. Feature Pruning and Simplification Test ===")
+###############################################################################
+# %% [markdown]
+# ## 10. Additional Model Experimentation (Optional)
+# This block includes LightGBM and CatBoost experiments and tuning, controlled by a flag to save compute time.
+###############################################################################
 
-# 1. Create pruned feature set
-print("\n1. Creating pruned feature set...")
+# Create pruned feature set by removing less important features
+print("\nCreating pruned feature set by removing selected features")
 X_pruned = X_no_leak.copy()
-
-# 2. Remove specified features
 features_to_remove = [
     'first_road_number',
     'second_road_number',
@@ -646,72 +630,58 @@ features_to_remove = [
     'trunk_road_flag',
     'junction_control'
 ]
-
-# Remove features if they exist
 features_removed = []
 for feature in features_to_remove:
     if feature in X_pruned.columns:
         X_pruned = X_pruned.drop(columns=[feature])
         features_removed.append(feature)
 
-print("\nRemoved features:")
+print("\nFeatures removed from pruned set:")
 for feature in features_removed:
     print(f"- {feature}")
-
-print(f"\nOriginal number of features: {X_no_leak.shape[1]}")
+print(f"\nNumber of features before pruning: {X_no_leak.shape[1]}")
 print(f"Number of features after pruning: {X_pruned.shape[1]}")
 
-# 3. Train new Random Forest model on pruned dataset
-print("\n3. Training Random Forest on pruned dataset...")
+# Train new Random Forest model on pruned dataset
+print("\nTraining Random Forest model on pruned feature set")
 X_train_pruned, X_test_pruned, y_train, y_test = train_test_split(
     X_pruned, y, test_size=0.3, random_state=42, stratify=y
 )
-
 rf_pruned = RandomForestClassifier(n_estimators=100, class_weight='balanced', random_state=42)
 rf_pruned.fit(X_train_pruned, y_train)
 
-# 4. Evaluate pruned model
-print("\n4. Evaluating pruned model...")
+# Evaluate pruned model
+print("\nEvaluating pruned Random Forest model")
 y_pred_pruned = rf_pruned.predict(X_test_pruned)
-
-print("\nPruned Model Results:")
-print(f"Accuracy: {accuracy_score(y_test, y_pred_pruned):.4f}")
-
-print("\nClassification Report:")
+print("\nPruned model accuracy: {:.4f}".format(accuracy_score(y_test, y_pred_pruned)))
+print("\nClassification report for pruned model:")
 print(classification_report(y_test, y_pred_pruned, target_names=class_labels))
-
-print("\nConfusion Matrix:")
+print("\nConfusion matrix for pruned model:")
 conf_matrix_pruned = confusion_matrix(y_test, y_pred_pruned)
 conf_df_pruned = pd.DataFrame(conf_matrix_pruned, 
                             index=class_labels,
                             columns=class_labels)
 print(conf_df_pruned)
-
-print("\nF1-scores:")
+print("\nF1-scores for pruned model:")
 macro_f1_pruned = f1_score(y_test, y_pred_pruned, average='macro')
 weighted_f1_pruned = f1_score(y_test, y_pred_pruned, average='weighted')
 print(f"Macro-average F1-score: {macro_f1_pruned:.4f}")
 print(f"Weighted-average F1-score: {weighted_f1_pruned:.4f}")
 
-# 5. Compare with original model
-print("\n5. Comparison with Original Model:")
+# Compare with original model
+print("\nComparison with original Random Forest model (no enhanced_severity_collision):")
+print(f"Original model accuracy: {rf_metrics_no_leak[0]:.4f}")
+print(f"Original macro-average F1-score: {f1_score(y_test, rf_model_no_leak.predict(X_test_no_leak), average='macro'):.4f}")
+print(f"Original weighted-average F1-score: {f1_score(y_test, rf_model_no_leak.predict(X_test_no_leak), average='weighted'):.4f}")
+print("\nPruned model accuracy: {:.4f}".format(accuracy_score(y_test, y_pred_pruned)))
+print(f"Pruned macro-average F1-score: {macro_f1_pruned:.4f}")
+print(f"Pruned weighted-average F1-score: {weighted_f1_pruned:.4f}")
 
-print("\nOriginal Model (X_no_leak):")
-print(f"Accuracy: {rf_metrics_no_leak[0]:.4f}")
-print(f"Macro-average F1-score: {f1_score(y_test, rf_model_no_leak.predict(X_test_no_leak), average='macro'):.4f}")
-print(f"Weighted-average F1-score: {f1_score(y_test, rf_model_no_leak.predict(X_test_no_leak), average='weighted'):.4f}")
-
-print("\nPruned Model (X_pruned):")
-print(f"Accuracy: {accuracy_score(y_test, y_pred_pruned):.4f}")
-print(f"Macro-average F1-score: {macro_f1_pruned:.4f}")
-print(f"Weighted-average F1-score: {weighted_f1_pruned:.4f}")
-
-# Calculate performance differences
+# Show performance differences
 accuracy_diff = accuracy_score(y_test, y_pred_pruned) - rf_metrics_no_leak[0]
 macro_f1_diff = macro_f1_pruned - f1_score(y_test, rf_model_no_leak.predict(X_test_no_leak), average='macro')
 weighted_f1_diff = weighted_f1_pruned - f1_score(y_test, rf_model_no_leak.predict(X_test_no_leak), average='weighted')
-
-print("\nPerformance Differences (Pruned - Original):")
+print("\nPerformance difference (pruned - original):")
 print(f"Accuracy difference: {accuracy_diff:.4f}")
 print(f"Macro-average F1-score difference: {macro_f1_diff:.4f}")
 print(f"Weighted-average F1-score difference: {weighted_f1_diff:.4f}")
@@ -800,19 +770,18 @@ if RUN_MODEL_EXPERIMENTS:
     print(f"Weighted-average F1-score: {f1_score(y_test, y_pred_lgb, average='weighted'):.4f}")
 
     # 5. Evaluate CatBoost
-    print("\n4. Evaluating CatBoost...")
     y_pred_cat = cat_model.predict(X_test_no_leak)
-    print("\nCatBoost Results:")
+    print("CatBoost classification results:")
     print(f"Accuracy: {accuracy_score(y_test, y_pred_cat):.4f}")
-    print("\nClassification Report:")
+    print("Classification Report:")
     print(classification_report(y_test, y_pred_cat, target_names=class_labels))
-    print("\nConfusion Matrix:")
+    print("Confusion Matrix:")
     conf_matrix_cat = confusion_matrix(y_test, y_pred_cat)
     conf_df_cat = pd.DataFrame(conf_matrix_cat, 
                               index=class_labels,
                               columns=class_labels)
     print(conf_df_cat)
-    print("\nF1-scores:")
+    print("F1-scores:")
     print(f"Macro-average F1-score: {f1_score(y_test, y_pred_cat, average='macro'):.4f}")
     print(f"Weighted-average F1-score: {f1_score(y_test, y_pred_cat, average='weighted'):.4f}")
 
@@ -825,13 +794,10 @@ if RUN_MODEL_EXPERIMENTS:
     print(f"CatBoost: {accuracy_score(y_test, y_pred_cat):.4f}")
 
     # === 15. LightGBM Hyperparameter Tuning ===
-    print("\n=== 15. LightGBM Hyperparameter Tuning ===")
-    
-    # LightGBM showed promising results in earlier testing, particularly for fatal accident recall
-    # We'll tune it to potentially improve this performance further
-    print("\nTuning LightGBM hyperparameters...")
+    # LightGBM performed well in earlier tests, especially on rare fatal cases.
+    # We're now tuning its hyperparameters to try improving its overall class balance.
 
-    # Define parameter grid
+    # We'll define a grid of hyperparameters to search for the best combination.
     param_grid = {
         'num_leaves': [31, 50, 70],  # Controls tree complexity
         'max_depth': [-1, 10, 20],   # Tree depth (-1 means no limit)
@@ -839,9 +805,7 @@ if RUN_MODEL_EXPERIMENTS:
         'n_estimators': [100, 200]   # Number of boosting iterations
     }
 
-    # Initialize GridSearchCV with macro F1 scoring
-    # Using macro F1 to ensure balanced performance across all classes
-    print("\nPerforming Grid Search with macro F1 scoring...")
+    # We'll use macro F1-score in GridSearchCV to encourage balanced performance across all classes.
     grid_search_lgb = GridSearchCV(
         lgb.LGBMClassifier(
             class_weight='balanced',
@@ -854,16 +818,15 @@ if RUN_MODEL_EXPERIMENTS:
         n_jobs=-1
     )
 
-    # Fit GridSearchCV
+    # Fit the grid search to find the best LightGBM configuration.
     grid_search_lgb.fit(X_train_no_leak, y_train)
 
-    # Print best parameters and score
+    # Show the best parameters and macro F1-score from cross-validation.
     print("\nGrid Search Results:")
     print(f"Best parameters: {grid_search_lgb.best_params_}")
     print(f"Best cross-validation score: {grid_search_lgb.best_score_:.4f}")
 
-    # Evaluate best model
-    print("\nEvaluating tuned LightGBM model...")
+    # Now let's evaluate the tuned LightGBM model on the test set.
     best_lgb = grid_search_lgb.best_estimator_
     y_pred_tuned_lgb = best_lgb.predict(X_test_no_leak)
 
@@ -888,11 +851,11 @@ if RUN_MODEL_EXPERIMENTS:
     print(f"Macro-average F1-score: {macro_f1:.4f}")
     print(f"Weighted-average F1-score: {weighted_f1:.4f}")
 
-    # Calculate fatal accident recall
+    # We'll also calculate recall for fatal accidents, since that's a key focus.
     fatal_recall = conf_matrix[0, 0] / (conf_matrix[0, 0] + conf_matrix[0, 1] + conf_matrix[0, 2])
     print(f"\nFatal Accident Recall: {fatal_recall:.4f}")
 
-    # Save results
+    # Save the tuned LightGBM results for later reference.
     print("\nSaving tuned LightGBM results to 'tuned_lightgbm_results.txt'...")
     with open('tuned_lightgbm_results.txt', 'w') as f:
         f.write("=== Tuned LightGBM Results ===\n\n")
@@ -914,37 +877,12 @@ if RUN_MODEL_EXPERIMENTS:
         f.write("\n\nClassification Report:\n")
         f.write(report)
 
-    # Update insights file
-    print("\nUpdating insights file with LightGBM tuning results...")
-    with open('insights.txt', 'a') as f:
-        f.write("\n=== LIGHTGBM HYPERPARAMETER TUNING INSIGHTS ===\n\n")
-        
-        f.write("1. Motivation for LightGBM Tuning:\n")
-        f.write("- LightGBM showed promising results in initial testing with 52% recall for fatal accidents\n")
-        f.write("- Potential for further improvement through hyperparameter optimization\n")
-        f.write("- Focus on balancing performance across all classes while maintaining fatal accident detection\n\n")
-        
-        f.write("2. Best Parameters Found:\n")
-        for param, value in grid_search_lgb.best_params_.items():
-            f.write(f"- {param}: {value}\n")
-        
-        f.write("\n3. Performance Analysis:\n")
-        f.write(f"- Overall accuracy: {accuracy:.4f}\n")
-        f.write(f"- Macro F1-score: {macro_f1:.4f}\n")
-        f.write(f"- Fatal accident recall: {fatal_recall:.4f}\n")
-        f.write("- Comparison with previous models:\n")
-        f.write("  * Improved balanced performance across classes\n")
-        f.write("  * Maintained strong fatal accident detection capability\n")
-        f.write("  * Better handling of class imbalance\n\n")
-        
-        f.write("4. Key Learnings:\n")
-        f.write("- LightGBM's leaf-wise growth strategy is particularly effective for imbalanced data\n")
-        f.write("- Careful parameter tuning can significantly impact model performance\n")
-        f.write("- Macro F1 scoring helps ensure balanced performance across all classes\n")
-        f.write("- Model shows promise for real-world deployment in accident severity prediction\n")
 
-# === 16. Geospatial Hotspot Detection ===
-print("\n=== 16. Geospatial Hotspot Detection ===")
+###############################################################################
+# %% [markdown]
+# ## 11. Geospatial Hotspot Detection
+# Using DBSCAN, we identify accident clusters and visualize them with Folium and Seaborn.
+###############################################################################
 
 # Import required libraries for geospatial analysis
 from sklearn.cluster import DBSCAN
@@ -953,51 +891,33 @@ from folium.plugins import HeatMap
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# 1. Data Preparation and Validation
-print("\n1. Validating Geospatial Data...")
-
-# Ensure df_geo exists and has required columns
+# Data preparation and validation for geospatial analysis
+print("\nValidating geospatial data for hotspot analysis")
 if 'df_geo' not in locals():
-    print("Creating df_geo from main DataFrame...")
+    print("Creating geospatial DataFrame from main dataset")
     df_geo = df[df['latitude'].notna() & df['longitude'].notna()].copy()
-
-# Print severity distribution in geospatial data
-print("\nAccident Severity Distribution in Geospatial Data:")
+# Show severity distribution in geospatial data
+print("\nAccident severity distribution in geospatial data:")
 severity_counts = df_geo['accident_severity'].value_counts().sort_index()
 for severity, count in severity_counts.items():
     print(f"{severity_labels[severity]}: {count:,}")
 
-# 2. DBSCAN Clustering
-print("\n2. Applying DBSCAN Clustering...")
-
-# DBSCAN is chosen because:
-# - It can find clusters of arbitrary shapes
-# - It's density-based, making it suitable for hotspot detection
-# - It can identify noise points (accidents outside hotspots)
-# - It doesn't require specifying the number of clusters beforehand
-
-# Prepare coordinates for clustering
+# Apply DBSCAN clustering to identify accident hotspots
+print("\nApplying DBSCAN clustering to geospatial accident data")
 coords = df_geo[['latitude', 'longitude']].values
-
-# Apply DBSCAN
-# eps=0.01 (approximately 1km) and min_samples=30 (minimum accidents to form a hotspot)
+# eps=0.01 (approx 1km), min_samples=30 (minimum accidents to form a hotspot)
 dbscan = DBSCAN(eps=0.01, min_samples=30, metric='euclidean')
 df_geo['cluster_id'] = dbscan.fit_predict(coords)
 
-# 3. Cluster Analysis
-print("\n3. Analyzing Clusters...")
-
-# Count clusters (excluding noise)
+# Analyze clusters and show statistics
+print("\nAnalyzing accident clusters identified by DBSCAN")
 n_clusters = len(set(df_geo['cluster_id'])) - (1 if -1 in df_geo['cluster_id'] else 0)
-print(f"\nNumber of identified hotspots: {n_clusters}")
-
-# Analyze accidents per cluster
-print("\nAccidents per Cluster:")
+print(f"\nNumber of identified accident hotspots: {n_clusters}")
+print("\nNumber of accidents per cluster:")
 cluster_counts = df_geo['cluster_id'].value_counts().sort_index()
 print(cluster_counts)
 
-# Analyze severity distribution within clusters
-print("\nSeverity Distribution within Clusters:")
+print("\nSeverity distribution within each cluster:")
 for cluster in sorted(df_geo['cluster_id'].unique()):
     if cluster != -1:  # Skip noise points
         cluster_data = df_geo[df_geo['cluster_id'] == cluster]
@@ -1036,36 +956,82 @@ plt.grid(True, alpha=0.3)
 plt.savefig('plots/hotspot_clusters.png', dpi=300, bbox_inches='tight')
 plt.close()
 
-# 4. Visualization
-print("\n4. Creating Visualizations...")
+# Create visualizations of accident clusters
+print("\nCreating visualizations of accident clusters")
 
-# Create Folium map
-print("\nCreating interactive map...")
+# Create a Folium map centered on the average location
 m = folium.Map(location=[df_geo['latitude'].mean(), df_geo['longitude'].mean()], 
-               zoom_start=6)
+               zoom_start=10)
 
 # Create FeatureGroups for clustered and unclustered accidents
 clustered_group = folium.FeatureGroup(name='Clustered Accidents')
 unclustered_group = folium.FeatureGroup(name='Unclustered Accidents (Noise)')
 
-# Color mapping for severity
-colors = {1: 'red', 2: 'orange', 3: 'green'}  # Fatal: red, Serious: orange, Slight: green
+# Define severity mapping and colors
+severity_mapping = {
+    1: 'Fatal',
+    2: 'Serious',
+    3: 'Slight'
+}
 
-# Add markers to appropriate groups
-for idx, row in df_geo.iterrows():
-    marker = folium.CircleMarker(
+severity_colors = {
+    'Fatal': 'red',
+    'Serious': 'orange',
+    'Slight': 'green'
+}
+
+# Convert numeric severity to string labels
+df_geo['accident_severity'] = df_geo['accident_severity'].map(severity_mapping)
+
+# Sample data for visualization (all fatal accidents and a sample of others)
+fatal_accidents = df_geo[df_geo['accident_severity'] == 'Fatal']
+other_accidents = df_geo[df_geo['accident_severity'] != 'Fatal'].sample(n=5000, random_state=42)
+sampled_data = pd.concat([fatal_accidents, other_accidents])
+
+# Add clustered accidents
+for _, row in sampled_data[sampled_data['cluster_id'] != -1].iterrows():
+    folium.CircleMarker(
         location=[row['latitude'], row['longitude']],
-        radius=3,
-        color=colors[row['accident_severity']],
+        radius=5 if row['accident_severity'] == 'Fatal' else 3,
+        color=severity_colors[row['accident_severity']],
         fill=True,
-        popup=f"Severity: {severity_labels[row['accident_severity']]}<br>Cluster: {row['cluster_id']}"
-    )
+        popup=f"Severity: {row['accident_severity']}<br>Cluster: {row['cluster_id']}"
+    ).add_to(clustered_group)
+
+# Add unclustered accidents
+for _, row in sampled_data[sampled_data['cluster_id'] == -1].iterrows():
+    folium.CircleMarker(
+        location=[row['latitude'], row['longitude']],
+        radius=4 if row['accident_severity'] == 'Fatal' else 2,
+        color=severity_colors[row['accident_severity']],
+        fill=True,
+        popup=f"Severity: {row['accident_severity']}<br>Unclustered"
+    ).add_to(unclustered_group)
+
+# Add markers for high-risk clusters (those with fatal accidents)
+for cluster_id in df_geo[df_geo['cluster_id'] != -1]['cluster_id'].unique():
+    cluster_data = df_geo[df_geo['cluster_id'] == cluster_id]
+    fatal_count = len(cluster_data[cluster_data['accident_severity'] == 'Fatal'])
     
-    # Add to appropriate group based on cluster_id
-    if row['cluster_id'] == -1:
-        marker.add_to(unclustered_group)
-    else:
-        marker.add_to(clustered_group)
+    if fatal_count > 0:
+        # Calculate cluster center
+        center_lat = cluster_data['latitude'].mean()
+        center_lon = cluster_data['longitude'].mean()
+        
+        # Create popup with cluster information
+        popup_text = f"""
+        Cluster {cluster_id}<br>
+        Total Accidents: {len(cluster_data)}<br>
+        Fatal: {fatal_count}<br>
+        Serious: {len(cluster_data[cluster_data['accident_severity'] == 'Serious'])}<br>
+        Slight: {len(cluster_data[cluster_data['accident_severity'] == 'Slight'])}
+        """
+        
+        folium.Marker(
+            location=[center_lat, center_lon],
+            popup=folium.Popup(popup_text, max_width=300),
+            icon=folium.Icon(color='red', icon='info-sign')
+        ).add_to(clustered_group)
 
 # Add both groups to the map
 clustered_group.add_to(m)
@@ -1075,11 +1041,10 @@ unclustered_group.add_to(m)
 folium.LayerControl().add_to(m)
 
 # Save the map
-print("\nSaving interactive map...")
 m.save('plots/accident_hotspots_map.html')
 
-# Create scatter plot
-print("\nCreating scatter plot...")
+# Create scatter plot of accident hotspots
+print("\nCreating scatter plot of accident hotspots")
 plt.figure(figsize=(12, 8))
 sns.scatterplot(data=df_geo, x='longitude', y='latitude', 
                 hue='cluster_id', palette='viridis', alpha=0.6)
@@ -1089,15 +1054,10 @@ plt.ylabel('Latitude')
 plt.savefig('plots/accident_hotspots_scatter.png')
 plt.close()
 
-# 5. Save Results
-print("\n5. Saving Results...")
-
-# Save clustered data
-print("\nSaving clustered data...")
+# Save clustered geospatial data to CSV
+print("\nSaving clustered geospatial data to 'outputs/clustered_geo_data.csv'")
 df_geo.to_csv('outputs/clustered_geo_data.csv', index=False)
 
-# 6. Update Insights
-print("\n6. Updating Insights...")
 
 # Calculate key metrics for insights
 hotspot_stats = {
@@ -1111,3 +1071,110 @@ hotspot_stats = {
 # Calculate severity distribution in hotspots
 hotspot_severity = df_geo[df_geo['cluster_id'] != -1]['accident_severity'].value_counts(normalize=True)
 noise_severity = df_geo[df_geo['cluster_id'] == -1]['accident_severity'].value_counts(normalize=True)
+
+###############################################################################
+# %% [markdown]
+# ## 12. Experiment: Using Cluster ID as a Feature
+# We test whether spatial hotspot membership (cluster_id) improves severity prediction.
+###############################################################################
+
+# Merge cluster_id from DBSCAN clusters into modeling data
+print("\nMerging cluster ID from DBSCAN clusters into modeling data")
+if 'df_geo' in locals() and 'df_model' in locals():
+    # Create a mapping of accident_index to cluster_id
+    cluster_mapping = df_geo.set_index('accident_index')['cluster_id']
+    # Map the cluster_ids to df_model using accident_index
+    df_model['cluster_id'] = df_model['accident_index'].map(cluster_mapping).fillna(-1).astype(int)
+
+    # One-hot encode the cluster_id to prevent the model from treating it as ordinal
+    cluster_dummies = pd.get_dummies(df_model['cluster_id'], prefix='cluster', drop_first=True)
+    X_clustered = pd.concat([X_no_leak.reset_index(drop=True), cluster_dummies.reset_index(drop=True)], axis=1)
+    y_clustered = y.reset_index(drop=True)
+
+    # Train/test split
+    X_train_cluster, X_test_cluster, y_train_cluster, y_test_cluster = train_test_split(
+        X_clustered, y_clustered, test_size=0.3, random_state=42, stratify=y_clustered
+    )
+
+    # Train model with cluster_id (Random Forest, with L2 regularization via max_depth)
+    print("\nTraining Random Forest with cluster_id included...")
+    rf_clustered = RandomForestClassifier(n_estimators=100, class_weight='balanced', random_state=42, max_depth=15)
+    rf_clustered.fit(X_train_cluster, y_train_cluster)
+
+    # Evaluate model
+    print("\nEvaluating model with cluster_id:")
+    evaluate_model(rf_clustered, X_test_cluster, y_test_cluster, "Random Forest (with cluster_id)")
+
+    # Compare performance
+    original_accuracy = rf_metrics_no_leak[0] if 'rf_metrics_no_leak' in locals() else None
+    new_accuracy = accuracy_score(y_test_cluster, rf_clustered.predict(X_test_cluster))
+    print(f"\nAccuracy change with cluster_id: {new_accuracy:.4f} vs {original_accuracy:.4f}" if original_accuracy else f"Accuracy with cluster_id: {new_accuracy:.4f}")
+
+    # Train LightGBM model with cluster_id included and L2 regularization
+    print("\nTraining LightGBM with cluster_id included...")
+    try:
+        import lightgbm as lgb
+    except ImportError:
+        import subprocess
+        subprocess.check_call(['pip', 'install', 'lightgbm'])
+        import lightgbm as lgb
+
+    lgb_clustered = lgb.LGBMClassifier(
+        class_weight='balanced',
+        random_state=42,
+        verbose=-1,
+        reg_lambda=1.0  # L2 regularization
+    )
+    lgb_clustered.fit(X_train_cluster, y_train_cluster)
+
+    # Evaluate LightGBM model
+    print("\nEvaluating LightGBM model with cluster_id:")
+    y_pred_lgb_cluster = lgb_clustered.predict(X_test_cluster)
+    evaluate_model(lgb_clustered, X_test_cluster, y_test_cluster, "LightGBM (with cluster_id)")
+
+    # Compare LightGBM performance with original LightGBM tuning if available
+    print("\nAccuracy of LightGBM with cluster_id:")
+    print(f"{accuracy_score(y_test_cluster, y_pred_lgb_cluster):.4f}")
+
+    # === Optional: Hyperparameter Tuning for LightGBM with Cluster ID ===
+    print("\nTuning LightGBM with cluster_id using GridSearchCV...")
+
+    param_grid_clustered = {
+        'num_leaves': [31, 50, 70],
+        'max_depth': [-1, 10, 20],
+        'learning_rate': [0.01, 0.05, 0.1],
+        'n_estimators': [100, 200]
+    }
+
+    grid_search_lgb_clustered = GridSearchCV(
+        lgb.LGBMClassifier(
+            class_weight='balanced',
+            random_state=42,
+            verbose=-1,
+            reg_lambda=1.0  # L2 regularization
+        ),
+        param_grid_clustered,
+        cv=3,
+        scoring='f1_macro',
+        n_jobs=-1
+    )
+
+    grid_search_lgb_clustered.fit(X_train_cluster, y_train_cluster)
+
+    print("\nBest parameters (LightGBM with cluster_id):")
+    print(grid_search_lgb_clustered.best_params_)
+    print(f"Best cross-validation score: {grid_search_lgb_clustered.best_score_:.4f}")
+
+    # Evaluate the tuned model
+    best_lgb_clustered = grid_search_lgb_clustered.best_estimator_
+    y_pred_best_lgb_cluster = best_lgb_clustered.predict(X_test_cluster)
+
+    print("\nEvaluating tuned LightGBM (with cluster_id):")
+    evaluate_model(best_lgb_clustered, X_test_cluster, y_test_cluster, "Tuned LightGBM (with cluster_id)")
+
+    # Calculate and display fatal recall
+    conf_matrix_tuned = confusion_matrix(y_test_cluster, y_pred_best_lgb_cluster)
+    fatal_recall = conf_matrix_tuned[0, 0] / conf_matrix_tuned[0].sum()
+    print(f"Fatal Accident Recall (tuned LightGBM with cluster_id): {fatal_recall:.4f}")
+else:
+    print("Required variables not found. Please ensure clustering and modeling datasets are loaded.")

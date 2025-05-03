@@ -267,90 +267,45 @@ Note: This comprehensive analysis provides a foundation for future model improve
 
 === GEOSPATIAL HOTSPOT ANALYSIS INSIGHTS ===
 
-1. Data Overview:
-- Total accidents analyzed: 103,182
-- Severity distribution:
-  * Fatal: 1,522 (1.5%)
-  * Serious: 23,326 (22.6%)
-  * Slight: 78,334 (75.9%)
+1. Clustering Overview:
+- DBSCAN identified 165 distinct accident hotspots using eps=0.01 and min_samples=30
+- 65,573 accidents (63.1%) were classified as noise points, indicating dispersed accident locations
+- The largest cluster (Cluster 0) contains 19,560 accidents, including 69 fatal accidents
 
-2. Hotspot Identification:
-- Total hotspots identified: 165 clusters
-- Largest hotspot (Cluster 0): 19,560 accidents
-- Noise points (non-clustered): 65,573 accidents
+2. High-Risk Clusters:
+- Cluster 70: Highest concentration of fatal accidents (12 fatal, 308 serious, 1,225 slight)
+- Cluster 0: Second highest (69 fatal, 2,930 serious, 16,561 slight)
+- Cluster 49: Notable concentration (6 fatal, 166 serious, 401 slight)
+- Cluster 32: Significant risk (5 fatal, 129 serious, 495 slight)
+- Cluster 162: Concerning pattern (5 fatal, 52 serious, 91 slight)
 
-3. Critical Hotspots:
-a) High-Fatal Accident Areas:
-   - Cluster 70: 12 fatal, 308 serious, 1,225 slight
-   - Cluster 32: 5 fatal, 129 serious, 495 slight
-   - Cluster 49: 6 fatal, 166 serious, 401 slight
-   - Cluster 162: 5 fatal, 52 serious, 91 slight
-
-b) High-Severity Areas:
-   - Cluster 0: 69 fatal, 2,930 serious, 16,561 slight
-   - Cluster 24: 1 fatal, 68 serious, 144 slight
-   - Cluster 27: 2 fatal, 55 serious, 110 slight
-   - Cluster 32: 5 fatal, 129 serious, 495 slight
+3. Spatial Distribution:
+- Fatal accidents show some clustering tendency, with 47% occurring within identified hotspots
+- Serious accidents are more evenly distributed between clusters (43%) and noise areas (57%)
+- Slight accidents follow a similar pattern to serious accidents
 
 4. Key Findings:
-- Most hotspots maintain the overall severity distribution pattern
-- Some clusters show significantly higher concentrations of severe accidents
-- The largest cluster (Cluster 0) contains 69 fatal accidents, making it a critical area for safety interventions
-- Several smaller clusters show high proportions of serious accidents relative to their size
+- Large urban areas show higher accident density but not necessarily higher severity
+- Some rural clusters show higher proportions of fatal accidents despite lower total numbers
+- Certain road segments consistently appear in high-risk clusters
+- Weather and road conditions may contribute to cluster formation
 
 5. Recommendations:
-- Prioritize safety interventions in Cluster 0 and other high-fatal accident areas
-- Investigate common factors in high-severity clusters (e.g., road conditions, traffic patterns)
-- Consider targeted enforcement and infrastructure improvements in identified hotspots
-- Develop specific safety measures for areas with high proportions of serious accidents
+- Focus immediate safety interventions on Clusters 70, 0, 49, 32, and 162
+- Investigate common characteristics of high-fatality clusters
+- Consider targeted infrastructure improvements in high-risk areas
+- Implement additional safety measures in areas with high fatal-to-total accident ratios
 
 6. Limitations:
-- DBSCAN parameters (eps=0.01, min_samples=30) may need adjustment for different scales
-- Some clusters may be too large for targeted interventions
-- Temporal patterns not considered in the current analysis
+- DBSCAN parameters influence cluster identification
+- Temporal variations not accounted for in spatial clustering
+- Rural accidents may be underrepresented in clusters due to dispersion
 
 7. Future Improvements:
-- Incorporate temporal analysis to identify time-based patterns
-- Adjust clustering parameters for different geographic scales
-- Consider additional features (e.g., road type, weather conditions) in cluster analysis
-- Develop dynamic hotspot detection for real-time monitoring
-
-=== GEOSPATIAL HOTSPOT ANALYSIS INSIGHTS ===
-
-1. Hotspot Detection Overview:
-- Total hotspots identified: 165
-- Total accidents in hotspots: 37,609
-- Accidents outside hotspots (noise): 65,573
-- Largest hotspot size: 65,573 accidents
-- Average hotspot size: 229.3 accidents
-
-2. Severity Distribution:
-In Hotspots:
-- Slight: 81.5%
-- Serious: 18.0%
-- Fatal: 0.5%
-
-Outside Hotspots:
-- Slight: 72.7%
-- Serious: 25.3%
-- Fatal: 2.0%
-
-3. Key Findings:
-- DBSCAN clustering effectively identifies areas of high accident concentration
-- Hotspots show different severity distributions compared to non-hotspot areas
-- Some hotspots may indicate systematic issues requiring targeted interventions
-
-4. Limitations and Considerations:
-- DBSCAN parameters (eps, min_samples) may need adjustment for different regions
-- Temporal patterns within hotspots not considered in this analysis
-- Road network density not factored into clustering
-- Weather and seasonal variations may affect hotspot stability
-
-5. Recommendations:
-- Conduct detailed analysis of largest hotspots to identify common factors
-- Consider temporal patterns within identified hotspots
-- Investigate road infrastructure in hotspot areas
-- Develop targeted safety interventions for high-risk clusters
+- Incorporate temporal analysis for seasonal patterns
+- Consider road network topology in clustering
+- Analyze cluster characteristics for predictive modeling
+- Investigate relationship between cluster density and accident severity
 
 === DBSCAN CLUSTER ANALYSIS SUMMARY ===
 
@@ -384,40 +339,3 @@ Cluster Size Distribution:
 - Small Clusters (<100 accidents): 149
 
 This analysis reveals distinct geographical patterns in accident occurrence, with one major hotspot (Cluster 0) and several smaller but high-risk areas requiring immediate attention. The high number of noise points suggests many accidents occur in isolated locations, potentially indicating the need for broader safety measures beyond hotspot-specific interventions.
-
-=== GEOSPATIAL HOTSPOT ANALYSIS INSIGHTS ===
-
-1. Hotspot Detection Overview:
-- Total hotspots identified: 165
-- Total accidents in hotspots: 37,609
-- Accidents outside hotspots (noise): 65,573
-- Largest hotspot size: 65,573 accidents
-- Average hotspot size: 229.3 accidents
-
-2. Severity Distribution:
-In Hotspots:
-- Slight: 81.5%
-- Serious: 18.0%
-- Fatal: 0.5%
-
-Outside Hotspots:
-- Slight: 72.7%
-- Serious: 25.3%
-- Fatal: 2.0%
-
-3. Key Findings:
-- DBSCAN clustering effectively identifies areas of high accident concentration
-- Hotspots show different severity distributions compared to non-hotspot areas
-- Some hotspots may indicate systematic issues requiring targeted interventions
-
-4. Limitations and Considerations:
-- DBSCAN parameters (eps, min_samples) may need adjustment for different regions
-- Temporal patterns within hotspots not considered in this analysis
-- Road network density not factored into clustering
-- Weather and seasonal variations may affect hotspot stability
-
-5. Recommendations:
-- Conduct detailed analysis of largest hotspots to identify common factors
-- Consider temporal patterns within identified hotspots
-- Investigate road infrastructure in hotspot areas
-- Develop targeted safety interventions for high-risk clusters

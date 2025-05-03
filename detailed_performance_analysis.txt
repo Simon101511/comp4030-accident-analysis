@@ -2,51 +2,51 @@
 
 Random Forest (without leakage):
 Confusion Matrix:
-[[    0    33   424]
- [    0   417  6581]
- [    2   554 22944]]
+[[    0    37   420]
+ [    1   404  6593]
+ [    3   539 22958]]
 
 Classification Report:
               precision    recall  f1-score   support
 
        Fatal       0.00      0.00      0.00       457
-     Serious       0.42      0.06      0.10      6998
+     Serious       0.41      0.06      0.10      6998
       Slight       0.77      0.98      0.86     23500
 
     accuracy                           0.75     30955
-   macro avg       0.39      0.35      0.32     30955
-weighted avg       0.68      0.75      0.68     30955
+   macro avg       0.39      0.34      0.32     30955
+weighted avg       0.67      0.75      0.67     30955
 
 
 XGBoost:
 Confusion Matrix:
-[[    0    71   386]
- [    3   551  6444]
- [    6   502 22992]]
+[[    2    78   377]
+ [    6   546  6446]
+ [    7   506 22987]]
 
 Classification Report:
               precision    recall  f1-score   support
 
-       Fatal       0.00      0.00      0.00       457
-     Serious       0.49      0.08      0.14      6998
+       Fatal       0.13      0.00      0.01       457
+     Serious       0.48      0.08      0.13      6998
       Slight       0.77      0.98      0.86     23500
 
     accuracy                           0.76     30955
-   macro avg       0.42      0.35      0.33     30955
+   macro avg       0.46      0.35      0.34     30955
 weighted avg       0.70      0.76      0.69     30955
 
 
 Grid Search Random Forest:
 Confusion Matrix:
-[[    0    13   444]
- [    0    80  6918]
- [    0    61 23439]]
+[[    0    17   440]
+ [    0   137  6861]
+ [    0   106 23394]]
 
 Classification Report:
               precision    recall  f1-score   support
 
        Fatal       0.00      0.00      0.00       457
-     Serious       0.52      0.01      0.02      6998
+     Serious       0.53      0.02      0.04      6998
       Slight       0.76      1.00      0.86     23500
 
     accuracy                           0.76     30955
