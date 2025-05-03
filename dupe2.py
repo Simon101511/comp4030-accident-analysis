@@ -54,9 +54,6 @@ Path("plots").mkdir(parents=True, exist_ok=True)
 # We begin by thoroughly examining the dataset's structure and content. This includes checking the number of rows and columns, inspecting a sample of the data, reviewing data types, identifying missing values, and detecting columns with low informational value. Understanding these aspects is critical for guiding subsequent cleaning and feature engineering steps.
 ###############################################################################
 
-df = pd.read_csv('dft-road-casualty-statistics-collision-2023.csv', low_memory=False)
-
-
 # %% [markdown]
 # ## 1A. Distribution Analysis of Numerical Features
 # In this section, we visualise and analyse the distribution of each numerical feature to understand their statistical properties and check for skewness, outliers, and normality assumptions.
@@ -71,7 +68,7 @@ for col in numerical_cols:
     plt.ylabel('Frequency')
     plt.tight_layout()
     plt.savefig(f'plots/distribution_{col}.png')
-    #plt.show()
+    plt.show()
 
 # %% [markdown]
 # ## 1B. Categorical Feature Distributions
@@ -92,7 +89,7 @@ for col in categorical_cols:
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     plt.savefig(f'plots/categorical_{col}.png')
-    #plt.show()
+    plt.show()
 
 # Load the dataset and conduct a comprehensive inspection:
 df = pd.read_csv('dft-road-casualty-statistics-collision-2023.csv', low_memory=False)
@@ -169,7 +166,7 @@ for method in correlation_methods:
     plt.title(f'{method.capitalize()} Correlation Matrix')
     plt.tight_layout()
     plt.savefig(f'plots/correlation_matrix_{method}.png')
-    #plt.show()
+    plt.show()
 
 ###############################################################################
 # %% [markdown]
@@ -214,12 +211,7 @@ for col in object_cols:
 # ## 1D. Principal Component Analysis (PCA)
 # PCA is applied to identify dominant directions of variance in the dataset and explore feature importance across principal components.
 
-df_pca_input = df[numerical_cols].copy()
-# Median imputation for missing values before PCA
-for col in df_pca_input.columns:
-    if df_pca_input[col].isnull().sum() > 0:
-        median_val = df_pca_input[col].median()
-        df_pca_input[col].fillna(median_val, inplace=True)
+df_pca_input = df[numerical_cols].fillna(df[numerical_cols].mean())
 
 scaler = StandardScaler()
 scaled_data = scaler.fit_transform(df_pca_input)
@@ -234,7 +226,7 @@ plt.ylabel('Cumulative Explained Variance')
 plt.title('PCA Explained Variance')
 plt.tight_layout()
 plt.savefig('plots/pca_explained_variance.png')
-#plt.show()
+plt.show()
 
 pca_feature_importance = pd.DataFrame(
     pca.components_.T,
