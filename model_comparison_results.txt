@@ -1,0 +1,16 @@
+=== Model Performance Comparison ===
+
+1. Original Models (No SMOTE):
+Logistic Regression: 0.4561
+Random Forest: 0.7547
+
+2. SMOTE Models:
+Logistic Regression with SMOTE: 0.4615
+Random Forest with SMOTE: 0.7365
+
+3. Advanced Models:
+XGBoost: 0.7606
+Random Forest (Grid Search): 0.7598
+
+Best Parameters (Grid Search):
+{'max_depth': 10, 'min_samples_split': 2, 'n_estimators': 200}

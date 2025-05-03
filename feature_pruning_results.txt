@@ -1,0 +1,27 @@
+=== Feature Pruning Analysis ===
+
+Removed Features:
+- first_road_number
+- second_road_number
+- trunk_road_flag
+- junction_control
+
+Original number of features: 28
+Number of features after pruning: 24
+
+Model Performance Comparison:
+
+Original Model (X_no_leak):
+Accuracy: 0.7547
+Macro-average F1-score: 0.3209
+Weighted-average F1-score: 0.6753
+
+Pruned Model (X_pruned):
+Accuracy: 0.7537
+Macro-average F1-score: 0.3242
+Weighted-average F1-score: 0.6771
+
+Performance Differences (Pruned - Original):
+Accuracy difference: -0.0010
+Macro-average F1-score difference: 0.0033
+Weighted-average F1-score difference: 0.0018

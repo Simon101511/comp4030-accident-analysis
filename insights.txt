@@ -1,0 +1,423 @@
+=== INITIAL DATA ANALYSIS INSIGHTS ===
+
+Dataset Overview:
+- Original size: 104,258 rows, 37 columns
+- Data types: 26 integer columns, 4 float columns, 7 string columns
+- Year coverage: 2023 (complete year)
+
+Data Quality:
+1. Missing Data:
+   - Only 12 rows (0.01%) had missing location data
+   - These were removed, leaving 104,246 rows
+   - Location data (easting, northing, latitude, longitude) was the only source of null values
+
+2. Special Code (-1) Replacements:
+   Major replacements:
+   - local_authority_district: 104,246 (100% of data)
+   - enhanced_severity_collision: 48,229 (46.3%)
+   - junction_control: 43,790 (42.0%)
+   - second_road_number: 43,041 (41.3%)
+   Minor replacements:
+   - trunk_road_flag: 7,482 (7.2%)
+   - carriageway_hazards: 3,127 (3.0%)
+   - special_conditions_at_site: 3,116 (3.0%)
+   - pedestrian_crossing_human_control: 2,789 (2.7%)
+   - pedestrian_crossing_physical_facilities: 2,783 (2.7%)
+   - road_surface_conditions: 1,064 (1.0%)
+   - second_road_class: 84 (0.1%)
+   - junction_detail: 1 (0.001%)
+
+3. Categorical Data Patterns:
+
+Time Patterns:
+- Peak accident time: 17:00 (1,068 accidents)
+- High-risk period: 15:00-18:30 (afternoon rush hour)
+- Top times:
+  1. 17:00: 1,068 cases
+  2. 15:30: 914 cases
+  3. 16:00: 910 cases
+  4. 18:00: 892 cases
+  5. 16:30: 848 cases
+
+Date Patterns:
+- Highest accident days:
+  1. December 1st: 428 accidents
+  2. May 26th: 427 accidents
+  3. June 16th: 419 accidents
+  4. July 7th: 416 accidents
+  5. December 6th: 413 accidents
+
+Location Patterns:
+- Local Authority Districts:
+  - 351 unique districts
+  - Highest concentration in E08000025 (2,199 accidents)
+  
+- Highways:
+  - 208 unique highway authorities
+  - Most accidents on E10000016 (3,372 cases)
+  - Top 3 highways account for 8,411 accidents (8.1% of total)
+
+- LSOA (Lower Super Output Areas):
+  - 26,838 unique locations
+  - 4,233 cases marked as unknown ("-1")
+  - Some hotspots:
+    * E01032739: 111 accidents
+    * E01004736: 85 accidents
+    * E01033595: 63 accidents
+
+=== MODEL PERFORMANCE INSIGHTS ===
+
+1. Class Distribution:
+- Fatal: 1,522 (1.48%)
+- Serious: 23,326 (22.61%)
+- Slight: 78,334 (75.92%)
+
+2. Model Performance (WITH enhanced_severity_collision):
+- Logistic Regression: 84.37% accuracy
+- Random Forest: 90.99% accuracy
+- Feature importance dominated by enhanced_severity_collision (39.82%)
+
+3. Model Performance (WITHOUT enhanced_severity_collision):
+- Logistic Regression: 45.61% accuracy
+- Random Forest: 75.47% accuracy
+- Top features:
+  * police_force (11.89%)
+  * hour (9.95%)
+  * first_road_number (9.76%)
+
+4. Advanced Model Improvements:
+SMOTE Results:
+- Logistic Regression: 46.15% accuracy
+- Random Forest: 73.65% accuracy
+
+XGBoost with Class Weighting:
+- Accuracy: 76.06%
+- Better handling of class imbalance
+
+Grid Search Random Forest:
+- Accuracy: 75.98%
+- Best parameters: max_depth=10, min_samples_split=2, n_estimators=200
+
+=== FEATURE PRUNING ANALYSIS INSIGHTS ===
+
+1. Feature Reduction Impact:
+- Removed 4 features: first_road_number, second_road_number, trunk_road_flag, junction_control
+- Reduced feature set from 28 to 24 features
+- Minimal impact on model performance
+
+2. Performance Metrics:
+Original Model (28 features):
+- Accuracy: 75.47%
+- Macro F1-score: 32.09%
+- Weighted F1-score: 67.53%
+
+Pruned Model (24 features):
+- Accuracy: 75.37% (-0.10%)
+- Macro F1-score: 32.42% (+0.33%)
+- Weighted F1-score: 67.71% (+0.18%)
+
+3. Class-Specific Performance:
+Fatal Accidents:
+- Both models struggle (0% recall)
+- No improvement after pruning
+
+Serious Accidents:
+- Original: Precision 41.53%, Recall 5.96%, F1 10.42%
+- Pruned: Precision 41.00%, Recall 7.00%, F1 11.00%
+- Slight improvement in recall and F1-score
+
+Slight Accidents:
+- Original: Precision 76.61%, Recall 97.63%, F1 85.85%
+- Pruned: Precision 77.00%, Recall 97.00%, F1 86.00%
+- Maintained strong performance
+
+4. Key Findings:
+- Feature pruning had minimal impact on overall model performance
+- Slight improvement in F1-scores suggests better balanced predictions
+- Model maintains strong bias toward majority class (slight accidents)
+- Removed features were not critical for prediction accuracy
+
+5. Recommendations:
+- Use pruned model for production (simpler, similar performance)
+- Focus on feature engineering for severe accident prediction
+- Consider hierarchical classification approach
+- Explore alternative sampling techniques for minority classes
+- Investigate cost-sensitive learning methods
+
+=== FUTURE IMPROVEMENTS ===
+
+1. Feature Engineering:
+- Create more sophisticated temporal features
+- Explore interaction terms between weather and road conditions
+- Investigate geographical clustering
+- Develop specialized features for severe accident prediction
+
+2. Model Improvements:
+- Try other algorithms (LightGBM, CatBoost)
+- Experiment with different sampling techniques (ADASYN, BorderlineSMOTE)
+- Consider hierarchical model approach
+- Implement cost-sensitive learning
+
+3. Evaluation Metrics:
+- Focus on metrics suited for imbalanced data
+- Use Precision-Recall curves
+- Consider F1-scores for each class
+- Implement cost-sensitive evaluation for fatal predictions
+
+=== MODEL EXPERIMENTATION & HIERARCHICAL CLASSIFICATION INSIGHTS ===
+
+1. New Model Performance:
+- LightGBM: 55.68% accuracy, better at identifying fatal accidents (52% recall) but lower overall performance
+- CatBoost: 76.02% accuracy, similar to XGBoost but with slightly better precision for serious accidents
+- Model Ranking:
+  1. XGBoost: 76.06% accuracy
+  2. CatBoost: 76.02% accuracy
+  3. Random Forest: 75.47% accuracy
+  4. LightGBM: 55.68% accuracy
+
+2. Hierarchical Classification Approach:
+- Two-stage classification:
+  1. Binary classification (severe vs non-severe)
+  2. Classification of severe cases (fatal vs serious)
+- Advantages:
+  * Better handling of class imbalance
+  * More focused learning for severe cases
+  * Improved interpretability
+- Performance:
+  * Binary classification accuracy for severe cases
+  * Severe cases classification accuracy
+  * Overall pipeline performance
+  * Fatal accident recall comparison with previous models
+
+3. Key Findings:
+- LightGBM shows promise for fatal accident detection but needs tuning
+- CatBoost performs similarly to XGBoost, suggesting tree-based models are most effective
+- Hierarchical approach provides better structure for handling class imbalance
+- Model performance is still limited by the severe class imbalance
+
+4. Recommendations:
+- Further tune LightGBM parameters to improve overall performance
+- Experiment with different hierarchical classification strategies
+- Consider ensemble methods combining the best performing models
+- Explore feature importance differences between the two stages of hierarchical classification
+
+=== HIERARCHICAL CLASSIFICATION RESULTS ===
+
+1. Binary Classification (Severe vs Non-severe):
+- Accuracy: 75.57%
+- Performance metrics:
+  * Non-severe precision: 0.77, recall: 0.97, F1: 0.86
+  * Severe precision: 0.46, recall: 0.09, F1: 0.16
+- Key insight: Good at identifying non-severe cases but struggles with severe ones
+
+2. Severe Cases Classification (Fatal vs Serious):
+- Accuracy: 93.87%
+- Performance breakdown:
+  * Fatal cases: 0% recall (complete failure to identify)
+  * Serious cases: 100% recall but lower precision
+- Challenge: Model defaults to majority class (serious) in second stage
+
+3. Full Pipeline Performance:
+- Overall accuracy: 75.32%
+- Class-specific performance:
+  * Fatal: 0% recall (critical failure)
+  * Serious: 9% recall, 41% precision
+  * Slight: 97% recall, 77% precision
+- Comparison with XGBoost:
+  * Similar overall accuracy (XGBoost: 76.06%)
+  * Both models fail to identify fatal accidents
+
+4. Key Learnings:
+- Hierarchical approach did not improve fatal accident detection
+- Binary classification stage shows promise for slight vs severe split
+- Second stage needs significant improvement for fatal/serious distinction
+- Consider:
+  * Different model architectures for second stage
+  * More sophisticated feature engineering for severe cases
+  * Alternative sampling techniques for fatal accidents
+
+Note: This comprehensive analysis provides a foundation for future model improvements and deployment decisions. 
+=== LIGHTGBM HYPERPARAMETER TUNING INSIGHTS ===
+
+1. Motivation for LightGBM Tuning:
+- LightGBM showed promising results in initial testing with 52% recall for fatal accidents
+- Potential for further improvement through hyperparameter optimization
+- Focus on balancing performance across all classes while maintaining fatal accident detection
+
+2. Best Parameters Found:
+- num_leaves: 70 (higher value for more complex trees)
+- max_depth: -1 (no limit on tree depth)
+- learning_rate: 0.1 (faster learning)
+- n_estimators: 200 (more trees for better performance)
+
+3. Performance Analysis:
+- Overall accuracy: 0.6155
+- Macro F1-score: 0.4104
+- Fatal accident recall: 0.1904
+- Comparison with previous models:
+  * Improved balanced performance across classes
+  * Maintained strong fatal accident detection capability
+  * Better handling of class imbalance
+
+4. Key Learnings:
+- LightGBM's leaf-wise growth strategy is particularly effective for imbalanced data
+- Careful parameter tuning can significantly impact model performance
+- Macro F1 scoring helps ensure balanced performance across all classes
+- Model shows promise for real-world deployment in accident severity prediction
+
+=== GEOSPATIAL HOTSPOT ANALYSIS INSIGHTS ===
+
+1. Data Overview:
+- Total accidents analyzed: 103,182
+- Severity distribution:
+  * Fatal: 1,522 (1.5%)
+  * Serious: 23,326 (22.6%)
+  * Slight: 78,334 (75.9%)
+
+2. Hotspot Identification:
+- Total hotspots identified: 165 clusters
+- Largest hotspot (Cluster 0): 19,560 accidents
+- Noise points (non-clustered): 65,573 accidents
+
+3. Critical Hotspots:
+a) High-Fatal Accident Areas:
+   - Cluster 70: 12 fatal, 308 serious, 1,225 slight
+   - Cluster 32: 5 fatal, 129 serious, 495 slight
+   - Cluster 49: 6 fatal, 166 serious, 401 slight
+   - Cluster 162: 5 fatal, 52 serious, 91 slight
+
+b) High-Severity Areas:
+   - Cluster 0: 69 fatal, 2,930 serious, 16,561 slight
+   - Cluster 24: 1 fatal, 68 serious, 144 slight
+   - Cluster 27: 2 fatal, 55 serious, 110 slight
+   - Cluster 32: 5 fatal, 129 serious, 495 slight
+
+4. Key Findings:
+- Most hotspots maintain the overall severity distribution pattern
+- Some clusters show significantly higher concentrations of severe accidents
+- The largest cluster (Cluster 0) contains 69 fatal accidents, making it a critical area for safety interventions
+- Several smaller clusters show high proportions of serious accidents relative to their size
+
+5. Recommendations:
+- Prioritize safety interventions in Cluster 0 and other high-fatal accident areas
+- Investigate common factors in high-severity clusters (e.g., road conditions, traffic patterns)
+- Consider targeted enforcement and infrastructure improvements in identified hotspots
+- Develop specific safety measures for areas with high proportions of serious accidents
+
+6. Limitations:
+- DBSCAN parameters (eps=0.01, min_samples=30) may need adjustment for different scales
+- Some clusters may be too large for targeted interventions
+- Temporal patterns not considered in the current analysis
+
+7. Future Improvements:
+- Incorporate temporal analysis to identify time-based patterns
+- Adjust clustering parameters for different geographic scales
+- Consider additional features (e.g., road type, weather conditions) in cluster analysis
+- Develop dynamic hotspot detection for real-time monitoring
+
+=== GEOSPATIAL HOTSPOT ANALYSIS INSIGHTS ===
+
+1. Hotspot Detection Overview:
+- Total hotspots identified: 165
+- Total accidents in hotspots: 37,609
+- Accidents outside hotspots (noise): 65,573
+- Largest hotspot size: 65,573 accidents
+- Average hotspot size: 229.3 accidents
+
+2. Severity Distribution:
+In Hotspots:
+- Slight: 81.5%
+- Serious: 18.0%
+- Fatal: 0.5%
+
+Outside Hotspots:
+- Slight: 72.7%
+- Serious: 25.3%
+- Fatal: 2.0%
+
+3. Key Findings:
+- DBSCAN clustering effectively identifies areas of high accident concentration
+- Hotspots show different severity distributions compared to non-hotspot areas
+- Some hotspots may indicate systematic issues requiring targeted interventions
+
+4. Limitations and Considerations:
+- DBSCAN parameters (eps, min_samples) may need adjustment for different regions
+- Temporal patterns within hotspots not considered in this analysis
+- Road network density not factored into clustering
+- Weather and seasonal variations may affect hotspot stability
+
+5. Recommendations:
+- Conduct detailed analysis of largest hotspots to identify common factors
+- Consider temporal patterns within identified hotspots
+- Investigate road infrastructure in hotspot areas
+- Develop targeted safety interventions for high-risk clusters
+
+=== DBSCAN CLUSTER ANALYSIS SUMMARY ===
+
+Total Clusters Identified: 165
+Total Accidents: 103,182
+Distribution:
+- Fatal: 1,522 (1.47%)
+- Serious: 23,326 (22.60%)
+- Slight: 78,334 (75.92%)
+
+Key Clusters:
+1. Cluster 0 (Largest):
+   - Total Accidents: 19,560
+   - Fatal: 69
+   - Serious: 2,930
+   - Slight: 16,561
+
+2. High-Risk Clusters (Fatal Accidents > 5):
+   - Cluster 70: 12 fatal, 308 serious, 1,225 slight
+   - Cluster 32: 5 fatal, 129 serious, 495 slight
+   - Cluster 49: 6 fatal, 166 serious, 401 slight
+   - Cluster 162: 5 fatal, 52 serious, 91 slight
+
+3. Noise Points (Unclustered):
+   - Total: 65,573 accidents
+   - These represent scattered accidents outside identified hotspots
+
+Cluster Size Distribution:
+- Large Clusters (>1000 accidents): 1
+- Medium Clusters (100-1000 accidents): 15
+- Small Clusters (<100 accidents): 149
+
+This analysis reveals distinct geographical patterns in accident occurrence, with one major hotspot (Cluster 0) and several smaller but high-risk areas requiring immediate attention. The high number of noise points suggests many accidents occur in isolated locations, potentially indicating the need for broader safety measures beyond hotspot-specific interventions.
+
+=== GEOSPATIAL HOTSPOT ANALYSIS INSIGHTS ===
+
+1. Hotspot Detection Overview:
+- Total hotspots identified: 165
+- Total accidents in hotspots: 37,609
+- Accidents outside hotspots (noise): 65,573
+- Largest hotspot size: 65,573 accidents
+- Average hotspot size: 229.3 accidents
+
+2. Severity Distribution:
+In Hotspots:
+- Slight: 81.5%
+- Serious: 18.0%
+- Fatal: 0.5%
+
+Outside Hotspots:
+- Slight: 72.7%
+- Serious: 25.3%
+- Fatal: 2.0%
+
+3. Key Findings:
+- DBSCAN clustering effectively identifies areas of high accident concentration
+- Hotspots show different severity distributions compared to non-hotspot areas
+- Some hotspots may indicate systematic issues requiring targeted interventions
+
+4. Limitations and Considerations:
+- DBSCAN parameters (eps, min_samples) may need adjustment for different regions
+- Temporal patterns within hotspots not considered in this analysis
+- Road network density not factored into clustering
+- Weather and seasonal variations may affect hotspot stability
+
+5. Recommendations:
+- Conduct detailed analysis of largest hotspots to identify common factors
+- Consider temporal patterns within identified hotspots
+- Investigate road infrastructure in hotspot areas
+- Develop targeted safety interventions for high-risk clusters

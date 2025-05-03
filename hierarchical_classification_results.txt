@@ -1,0 +1,16 @@
+=== Hierarchical Classification Results ===
+
+1. Binary Classification (Severe vs Non-severe):
+Accuracy: 0.7557
+F1-score for severe cases: 0.1558
+
+2. Severe Cases Classification (Fatal vs Serious):
+Accuracy: 0.9387
+
+3. Full Pipeline Performance:
+Overall Accuracy: 0.7532
+Fatal Accident Recall: 0.0000
+
+4. Comparison with Previous Best Model:
+XGBoost Fatal Recall: 0.0000
+Hierarchical Pipeline Fatal Recall: 0.0000
